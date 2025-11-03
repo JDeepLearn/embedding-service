@@ -1,0 +1,154 @@
+# ----------------------------
+# Python general
+# ----------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+pip-log.txt
+
+# PyInstaller
+*.spec
+build/
+dist/
+
+# Poetry / uv / pipenv
+.poetry/
+poetry.lock
+.uv/
+.uv_cache/
+*.egg-info/
+.eggs/
+
+# ----------------------------
+# FastAPI / Uvicorn / Runtime
+# ----------------------------
+*.db
+*.sqlite3
+instance/
+logs/
+*.log
+*.pid
+*.gz
+*.tmp
+
+# ----------------------------
+# Jupyter / IPython
+# ----------------------------
+.ipynb_checkpoints
+*.ipynb
+
+# ----------------------------
+# Model & embedding caches
+# ----------------------------
+# SentenceTransformers / HuggingFace
+.cache/
+~/.cache/
+**/cache/
+**/models/
+models/
+# avoid committing large HF model weights
+sentence_transformers/
+transformers_cache/
+hf_home/
+# Couchbase SDK temp artifacts
+couchbase_temp/
+
+# ----------------------------
+# Docker
+# ----------------------------
+Dockerfile~
+docker-compose*.yaml~
+docker-compose.override.yml
+.dockerignore
+*.tar
+*.img
+*.bak
+*.swp
+*.log
+
+# Ignore build context caches
+.docker/
+docker-data/
+docker-volumes/
+docker-logs/
+
+# ----------------------------
+# Tests / coverage
+# ----------------------------
+.coverage
+htmlcov/
+.tox/
+.nox/
+pytest_cache/
+coverage.xml
+nosetests.xml
+test-results.xml
+reports/
+.pytest_cache/
+
+# ----------------------------
+# IDE / Editor / OS files
+# ----------------------------
+# VSCode
+.vscode/
+.settings/
+*.code-workspace
+
+# PyCharm / JetBrains
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux / misc
+*~
+.*.swp
+.swo
+.swn
+
+# ----------------------------
+# Project-specific directories
+# ----------------------------
+# app + embedding-service artifacts
+app/__pycache__/
+app/core/__pycache__/
+app/providers/__pycache__/
+embedding-service/__pycache__/
+embedding-service/.venv/
+embedding-service/logs/
+embedding-service/.pytest_cache/
+embedding-service/models/
+embedding-service/tmp/
+embedding-service/cache/
+embedding-service/.env
+embedding-service/.env.local
+
+# ----------------------------
+# Generated data / outputs
+# ----------------------------
+data/
+output/
+outputs/
+artifacts/
+checkpoints/
+runs/

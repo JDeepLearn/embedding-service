@@ -1,0 +1,11 @@
+services:
+  embedding-service:
+    build: .
+    container_name: embedding-service
+    env_file: .env
+    ports:
+      - "8000:8000"
+    environment:
+      - EMBED_PROVIDER=hf
+      - HF_MODEL=intfloat/e5-large-v2
+    restart: unless-stopped

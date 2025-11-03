@@ -1,0 +1,22 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Install uv
+        run: pip install uv==0.3.2
+      - name: Install deps
+        run: uv pip install --system .[dev]
+      - name: Lint & Type
+        run: |
+          ruff check .
+          mypy app
+      - name: Tests
+        run: pytest -q
+      - name: Build image
+        run: docker build -t embedding-service:${{ github.sha }} .

@@ -1,0 +1,22 @@
+[project]
+name = "embedding-service"
+version = "1.0.0"
+description = "FastAPI embedding microservice supporting HF local + on-prem Granite."
+requires-python = ">=3.11"
+
+dependencies = [
+  "fastapi==0.120.4",
+  "uvicorn[standard]==0.38.0",
+  "pydantic==2.12.3",
+  "pydantic-settings==2.6.1",
+  "sentence-transformers==2.6.1",
+  'transformers==4.41.2',
+  "torch>=2.2.1,<2.2.3",
+  "requests==2.32.3",
+  "structlog==24.4.0",
+  "numpy==1.26.4",
+  "prometheus-client==0.21.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.3.4", "pytest-asyncio==0.24.0", "httpx==0.28.1"]
