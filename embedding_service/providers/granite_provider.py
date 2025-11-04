@@ -1,7 +1,7 @@
 import requests
 from typing import List
-from app.providers.base import EmbeddingProvider
-from app.core.logging import get_logger
+from embedding_service.providers.base import EmbeddingProvider
+from embedding_service.core.logging import get_logger
 
 log = get_logger("granite-provider")
 

@@ -54,8 +54,7 @@ logs/
 .cache/
 ~/.cache/
 **/cache/
-**/models/
-models/
+/models/
 # avoid committing large HF model weights
 sentence_transformers/
 transformers_cache/
@@ -129,19 +128,19 @@ Desktop.ini
 # ----------------------------
 # Project-specific directories
 # ----------------------------
-# app + embedding-service artifacts
-app/__pycache__/
-app/core/__pycache__/
-app/providers/__pycache__/
-embedding-service/__pycache__/
-embedding-service/.venv/
-embedding-service/logs/
-embedding-service/.pytest_cache/
-embedding-service/models/
-embedding-service/tmp/
-embedding-service/cache/
-embedding-service/.env
-embedding-service/.env.local
+# embedding-service + embedding-service artifacts
+embedding_service/__pycache__/
+embedding_service/core/__pycache__/
+embedding_service/providers/__pycache__/
+embedding_service/__pycache__/
+embedding_service/.venv/
+embedding_service/logs/
+embedding_service/.pytest_cache/
+embedding_service/models/
+embedding_service/tmp/
+embedding_service/cache/
+embedding_service/.env
+embedding_service/.env.local
 
 # ----------------------------
 # Generated data / outputs
