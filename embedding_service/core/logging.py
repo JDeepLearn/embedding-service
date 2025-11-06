@@ -1,26 +1,54 @@
 import logging
 import json
 import sys
-import warnings
 from datetime import datetime
 
 from embedding_service.core.config import settings
 
 
+# Keys that are part of the standard LogRecord and should not be duplicated
+_BASE_LOG_FIELDS = {
+    "name",
+    "msg",
+    "args",
+    "levelname",
+    "levelno",
+    "pathname",
+    "filename",
+    "module",
+    "exc_info",
+    "exc_text",
+    "stack_info",
+    "lineno",
+    "funcName",
+    "created",
+    "msecs",
+    "relativeCreated",
+    "thread",
+    "threadName",
+    "processName",
+    "process",
+}
+
+
 class JsonFormatter(logging.Formatter):
-    """Lightweight JSON formatter for structured, machine-readable logs."""
+    """JSON formatter that preserves both message and extra structured fields."""
 
     def format(self, record: logging.LogRecord) -> str:
-        log_record = {
+        # Base envelope
+        log_record: dict = {
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
         }
 
-        if hasattr(record, "extra") and isinstance(record.extra, dict):
-            log_record.update(record.extra)
+        # Add any non-standard attributes (set via `extra={...}`)
+        for key, value in record.__dict__.items():
+            if key not in _BASE_LOG_FIELDS and key not in ("message", "asctime"):
+                log_record[key] = value
 
+        # Exception info, if present
         if record.exc_info:
             log_record["exception"] = self.formatException(record.exc_info)
 
@@ -32,11 +60,6 @@ def configure_logging() -> None:
     Configure root logging to use JSON output.
     Filters known harmless warnings for clean startup logs.
     """
-    # --- Suppress specific noisy warnings ---
-    warnings.filterwarnings(
-        "ignore", message="Field 'model_name' in 'Settings' conflicts with protected namespace"
-    )
-    warnings.filterwarnings("ignore", message="`resume_download` is deprecated")
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())

@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     environment: str = "local"  # local | dev | prod
 
     # --- Logging ---
-    log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    log_level: str = "INFO"  # DEBUG | INFO | WARNING | ERROR | CRITICAL
 
     # --- Model Configuration ---
     model_name: str = "intfloat/e5-large-v2"
@@ -27,6 +27,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        # Avoid conflict with Pydantic's internal `model_` namespace:
         protected_namespaces=("settings_",),
     )
 

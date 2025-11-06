@@ -1,28 +1,39 @@
 from fastapi import APIRouter
+from embedding_service.providers.registry import get_provider
 from embedding_service.core.config import settings
-from embedding_service.providers.hf_provider import HFProvider
 from embedding_service.core.logging import get_logger
 
 router = APIRouter()
 log = get_logger(__name__)
 
-# Create a lightweight provider instance reference
-# (We won’t re-load the model, just test readiness.)
-_provider = HFProvider(settings.model_name)
-
 
 @router.get("/health", tags=["system"])
 async def health_check():
     """
-    Health check endpoint for readiness and liveness probes.
-    Returns system, model, and environment information.
+    Lightweight health/readiness endpoint.
+    Returns service metadata and model load status.
     """
-    status_info = {
-        "status": "ok" if _provider.ready() else "not_ready",
-        "service": settings.app_name,
-        "version": settings.app_version,
-        "environment": settings.environment,
-        "model": _provider.model(),
-    }
-    log.info("Health check", extra=status_info)
-    return status_info
+    try:
+        provider = get_provider()
+        model_ready = provider.ready()
+        status = "ok" if model_ready else "not_ready"
+
+        response = {
+            "status": status,
+            "service": settings.app_name,
+            "version": settings.app_version,
+            "environment": settings.environment,
+            "model": provider.model(),
+            "provider": provider.name(),
+        }
+
+        log.info("Health check", extra=response)
+        return response
+
+    except Exception as exc:
+        log.exception("Health check failed", extra={"error": str(exc)})
+        return {
+            "status": "error",
+            "service": settings.app_name,
+            "detail": str(exc),
+        }

@@ -254,7 +254,7 @@ No API or backend code changes needed.
 
 ## Future Enhancements
 
-* ✅ Model registry integration (MLflow, IBM Granite, Hugging Face Hub)
-* ✅ GPU inference optimization
-* ✅ Prometheus metrics & distributed tracing
-* ✅ Request-ID correlation for observability
+* Model registry integration (MLflow, IBM Granite, Hugging Face Hub)
+* GPU inference optimization
+* Prometheus metrics & distributed tracing
+* Request-ID correlation for observability

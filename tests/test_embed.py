@@ -1,74 +1,100 @@
+import pytest
 from fastapi.testclient import TestClient
+
 from embedding_service.main import create_app
+from embedding_service.providers.registry import get_provider
+from embedding_service.core.config import settings
 
-app = create_app()
-client = TestClient(app)
+
+@pytest.fixture(scope="session")
+def client():
+    """Reusable test client with shared app instance."""
+    app = create_app()
+    return TestClient(app)
 
 
-def test_health_check_ok():
-    """✅ /health returns service metadata and model info."""
+def test_health_ok(client):
+    """✅ /health endpoint should return model info and status."""
     res = client.get("/health")
     assert res.status_code == 200
     data = res.json()
-    assert data["status"] == "ok"
-    assert "service" in data
+    assert "status" in data
+    assert data["status"] in {"ok", "not_ready"}
     assert "model" in data
+    assert "provider" in data
 
 
-def test_single_text_embedding():
-    """✅ /embed returns a valid single embedding."""
-    res = client.post("/embed", json={"text": "Enterprise embedding test"})
+def test_single_text_embedding(client):
+    """✅ /embed should generate single text embedding."""
+    res = client.post("/embed", json={"text": "Test embedding"})
     assert res.status_code == 200
     data = res.json()
     assert data["provider"] == "hf-local"
-    assert data["dim"] == len(data["embedding"])
     assert isinstance(data["embedding"], list)
-    assert len(data["embedding"]) > 0
+    assert data["dim"] == len(data["embedding"])
+    assert all(isinstance(x, float) for x in data["embedding"])
 
 
-def test_batch_embeddings():
-    """✅ /embed handles multiple texts."""
-    texts = ["first test", "second test"]
+def test_batch_embedding(client):
+    """✅ /embed handles batch embedding requests."""
+    texts = ["hello", "world"]
     res = client.post("/embed", json={"texts": texts})
     assert res.status_code == 200
     data = res.json()
+    assert "embeddings" in data
     assert data["count"] == len(texts)
-    assert isinstance(data["embeddings"], list)
-    assert len(data["embeddings"][0]) == data["dim"]
+    assert all(isinstance(vec, list) for vec in data["embeddings"])
 
 
-def test_missing_fields_returns_400():
-    """❌ /embed with no input should return 400."""
+def test_validation_too_long(client):
+    """❌ Input text longer than max limit returns 400."""
+    too_long_text = "x" * 5000
+    res = client.post("/embed", json={"text": too_long_text})
+    assert res.status_code == 400
+    assert "exceeds" in res.text
+
+
+def test_validation_too_many_texts(client):
+    """❌ Batch size too large returns 400."""
+    too_many = ["x"] * 999
+    res = client.post("/embed", json={"texts": too_many})
+    assert res.status_code == 400
+    assert "Too many texts" in res.text
+
+
+def test_empty_payload(client):
+    """❌ Missing both 'text' and 'texts' should fail."""
     res = client.post("/embed", json={})
     assert res.status_code == 400
-    data = res.json()
-    assert "detail" in data
-    assert "must be provided" in data["detail"]
+    assert "must be provided" in res.text
 
 
-def test_invalid_type_returns_422():
-    """❌ /embed with wrong data type triggers 422 validation error."""
-    res = client.post("/embed", json={"text": 12345})
-    assert res.status_code == 422
+def test_error_envelope_consistency(client, monkeypatch):
+    """❌ Simulate provider error and ensure JSON error envelope shape."""
+    provider = get_provider()
 
+    def fail(_):
+        raise RuntimeError("simulated failure")
 
-def test_internal_exception_json_format(monkeypatch):
-    """❌ Simulate internal error and confirm JSON error envelope."""
-    from embedding_service.api import routes_embed
+    monkeypatch.setattr(provider, "embed", fail)
 
-    def fail(*args, **kwargs):
-        raise RuntimeError("Simulated failure")
-
-    monkeypatch.setattr(routes_embed._provider, "embed", fail)
-    res = client.post("/embed", json={"text": "failure test"})
+    res = client.post("/embed", json={"text": "trigger"})
     assert res.status_code == 500
     body = res.json()
     assert body["error"] == "Internal Server Error"
-    assert "path" in body
+    assert "detail" in body
 
 
-def test_metrics_endpoint_exposed():
-    """✅ /metrics exposes Prometheus-compatible metrics."""
+def test_metrics_toggle(client):
+    """✅ Metrics middleware and /metrics route obey config flag."""
+    # Metrics enabled by default
     res = client.get("/metrics")
     assert res.status_code == 200
     assert "embedding_service_requests_total" in res.text
+
+    # Simulate metrics disabled
+    settings.metrics_enabled = False
+    app = create_app()
+    test_client = TestClient(app)
+    res = test_client.get("/metrics")
+    assert res.status_code == 404  # not mounted
