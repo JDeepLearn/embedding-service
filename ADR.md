@@ -1,136 +1,165 @@
-# Architecture & Deployment Overview
-
-**Document:** ADR-001
-**System:** Embedding Service
+# **Architecture Decision Record (ADR-001): Granite Embedding Service**
 
 ---
 
-## Purpose
+## 1. Context
 
-The **Embedding Service** provides standardized text embeddings for enterprise Retrieval-Augmented Generation (RAG) and FAQ search pipelines.
-It is designed for **on-premises operation** — no external API calls or data egress — ensuring full data privacy and compliance.
+The organization requires an **on-premise, enterprise-grade embedding service** to power Retrieval-Augmented Generation (RAG) systems and AI knowledge products.
+Key drivers include:
 
----
-
-## Architecture Summary
-
-| Layer                                              | Responsibility                                                               |
-|----------------------------------------------------|------------------------------------------------------------------------------|
-| **API Layer** (`embedding_service.api`)            | Exposes REST endpoints `/embed`, `/health`, `/metrics` via FastAPI.          |
-| **Provider Layer** (`embedding_service.providers`) | Abstract interface for embedding backends (Hugging Face, IBM Granite, etc.). |
-| **Core Layer** (`embedding_service.core`)          | Cross-cutting services: configuration, JSON logging, Prometheus metrics.     |
-| **App Entrypoint** (`embedding_service.main`)      | Bootstraps FastAPI app, sets up exception handlers and logging.              |
-| **Tests** (`tests/`)                               | Full functional coverage (positive + negative).                              |
-
-### Technology Stack
-
-| Category           | Technology                                    |
-|--------------------|-----------------------------------------------|
-| Language           | Python 3.11                                   |
-| Framework          | FastAPI 0.121.0                               |
-| Dependency Manager | [uv](https://docs.astral.sh/uv/)              |
-| Model Runtime      | SentenceTransformers (`intfloat/e5-large-v2`) |
-| Observability      | JSON logging + Prometheus metrics             |
-| Packaging          | Hatchling + Docker                            |
-| CI/CD              | GitHub Actions (build, test, push image)      |
+* **Data Sovereignty & Security:** No external API dependencies (all model inference must run locally).
+* **Model Agnosticism:** Ability to switch between Granite, BGE, MiniLM, or other Hugging Face embedding models without code change.
+* **Operational Excellence:** Support for observability, scalability, and clean deployment via container orchestration (Kubernetes / OpenShift).
+* **Standardization:** Alignment with internal AI Service Framework and MCP (Model Context Protocol) integration standards.
 
 ---
 
-## Key Design Decisions
+## 2. Decision
 
-| #      | Decision                                       | Rationale                                                                          |
-|--------|------------------------------------------------|------------------------------------------------------------------------------------|
-| **D1** | **Provider Abstraction (`EmbeddingProvider`)** | Enables future models (IBM Granite, OpenAI) without changing routes or data flow.  |
-| **D2** | **App Factory Pattern**                        | Allows test isolation, multiple deployments per process, and dependency injection. |
-| **D3** | **JSON Logging**                               | Structured logs compatible with ELK, Datadog, CloudWatch; no third-party log deps. |
-| **D4** | **Central Exception Handler**                  | Guarantees uniform error envelopes for all 4xx/5xx responses.                      |
-| **D5** | **Prometheus Metrics**                         | Native `/metrics` endpoint for request count + latency histograms; zero overhead.  |
-| **D6** | **One-Click Setup Script**                     | Ensures deterministic developer onboarding; same flow as CI builds.                |
-| **D7** | **Containerization (Docker)**                  | Immutable runtime; identical between dev, CI, and prod.                            |
-| **D8** | **CI/CD via GitHub Actions**                   | Automated build → test → image publish; ensures quality gates.                     |
+### 2.1 Adopt a modular **FastAPI-based Embedding Microservice**
+
+* Core framework: **FastAPI** for its async I/O model, OpenAPI schema generation, and performance.
+* Each endpoint (`/embed`, `/info`, `/health`, `/metrics`) adheres to **enterprise REST standards** and emits **JSON-structured logs**.
+
+### 2.2 Use **IBM Granite-Embedding-English-R2** as the primary foundation model
+
+* Hosted locally via **Hugging Face Hub** download (`huggingface-cli download`).
+* Supports fallback or alternative models via `MODEL_PATH` and `MODEL_NAME` environment variables.
+* Model loaded using **SentenceTransformer** abstraction with **ModernBERT fallback** (`trust_remote_code=True`).
+
+### 2.3 Design for **Offline / Air-Gapped Environments**
+
+* All dependencies pre-installed; model files are mounted via Docker volume.
+* No internet connectivity required at runtime.
+
+### 2.4 Adopt a **12-Factor, Configuration-Driven Design**
+
+* All tunables (batch size, truncation length, API key, CORS, metrics) are controlled through environment variables or `.env` files.
+* `.env.example` provides standard operational defaults.
+* Code uses Pydantic `BaseSettings` for typed validation and secure configuration loading.
+
+### 2.5 Implement **Centralized Observability**
+
+* Structured JSON logging (`logger.py`) for ingestion by ELK or Loki.
+* Prometheus metrics via `/metrics` endpoint.
+* Request correlation through `request_id` field.
+* Docker-level `HEALTHCHECK` integrated with `/health`.
+
+### 2.6 Enforce **Security and Compliance**
+
+* Optional `X-API-Key` header authentication.
+* CORS restrictions enforced through `CORS_ALLOW_ORIGINS` env variable.
+* Explicit security disclaimer on `trust_remote_code` usage.
+* No data persistence; stateless container design ensures clean restarts.
+
+### 2.7 Ensure **Testability and CI/CD Integration**
+
+* Full `pytest` suite validates API endpoints, model readiness, and input boundaries.
+* Lightweight scaling benchmark built into tests.
+* CI pipeline spins up service container, runs tests, and enforces health readiness.
+
+### 2.8 Containerization Strategy
+
+* Runtime built on **`python:3.12-slim`** for small footprint.
+* Deterministic, reproducible builds via `pyproject.toml` and pinned dependencies.
+* Stateless service that scales horizontally under orchestration.
+* Optional health probes and Prometheus scraping configuration for Kubernetes.
+
+---
+## 3. Consequences
+
+### 3.1 Positive Outcomes
+
+* On-premise deployment with zero data leakage.
+* Supports any Hugging Face embedding model without code change.
+* Enterprise observability (Prometheus + JSON logs).
+* Security features (API key, CORS, input limits).
+* Simplified developer onboarding and maintainability.
+
+### 4.2 Trade-Offs
+
+* ⚠️ Slightly higher image size (~1.5–2 GB) due to PyTorch dependencies.
+* ⚠️ Model load time (~5–15 s) on startup, mitigated by warm-up logic.
+* ⚠️ `trust_remote_code=True` requires governance approval when using non-internal models.
 
 ---
 
-## Deployment Overview
+## 5. Implementation Summary
 
-### 4.1 Local / Dev
-
-```bash
-bash setup_local.sh
-```
-
-* Verifies Python 3.11, installs `uv`, dependencies, `.env`, and launches at `http://localhost:8000`.
-
-### 4.2 Docker
-
-```bash
-docker build -t embedding-service .
-docker run -p 8000:8000 --env-file .env embedding-service
-```
-
-### 4.3 Production / Kubernetes
-
-* Deploy container `embedding-service:latest` behind API gateway or ingress.
-* Health probes:
-
-  * **Liveness:** `/health`
-  * **Readiness:** `/metrics`
-* Logging: JSON stdout to centralized collector.
-* Metrics: scrape `/metrics` via Prometheus or OTel sidecar.
+| Component         | Description                                      |
+| ----------------- | ------------------------------------------------ |
+| **Language**      | Python 3.11+                                     |
+| **Framework**     | FastAPI                                          |
+| **Runtime**       | uvicorn with async I/O                           |
+| **Config System** | Pydantic Settings (`config.py`)                  |
+| **Logging**       | JSON via standard logger                         |
+| **Model Loader**  | `SentenceTransformer` with ModernBERT fallback   |
+| **Testing**       | `pytest`, `requests`, `numpy`                    |
+| **Packaging**     | `pyproject.toml` (uv-compatible)                 |
+| **Deployment**    | Docker (Python 3.12 slim base)                   |
+| **Monitoring**    | Prometheus metrics, ELK logs                     |
+| **Security**      | API-key header, input validation, no persistence |
 
 ---
 
-## Observability & Reliability
+## 6. Operational Lifecycle
 
-| Capability             | Implementation                   | Integration                  |
-|------------------------|----------------------------------|------------------------------|
-| **Structured Logging** | JSON logs (stdout)               | ELK / Datadog                |
-| **Metrics**            | Prometheus counters & histograms | Grafana, Prometheus          |
-| **Tracing (future)**   | OTel bridge possible             | Jaeger / Tempo               |
-| **Error Handling**     | Global exception handler         | Consistent 500/400 envelopes |
-| **Health Checks**      | `/health`, `/metrics`            | Load-balancer probes         |
-
----
-
-## Security & Compliance
-
-* No outbound network calls (air-gapped safe).
-* No credentials persisted in code or container.
-* Environment variables via `.env` or Kubernetes Secrets.
-* Supports API-key auth extension (optional).
-* Log redaction enforced at app level.
+| Phase        | Responsibility     | Artifacts                           |
+| ------------ | ------------------ | ----------------------------------- |
+| **Build**    | CI pipeline        | Docker image, test reports          |
+| **Deploy**   | Platform Ops       | Kubernetes manifest / Helm chart    |
+| **Monitor**  | SRE team           | Prometheus + Grafana dashboards     |
+| **Evaluate** | AI Engineering     | Model metrics (nDCG, MRR, Recall@K) |
+| **Upgrade**  | Architecture Board | Controlled via ADR versioning       |
 
 ---
 
-## Testing & Quality Gates
+## 7. Governance & Compliance
 
-* **Framework:** `pytest`
-* **Coverage:** > 95 % lines, 100 % endpoint paths
-* **Scenarios:**
-
-  * Positive: `/health`, `/embed` single & batch
-  * Negative: invalid input, empty payloads, internal exceptions
-  * Observability: `/metrics` endpoint verification
-* **CI/CD:** GitHub Actions blocks merge on failure.
+* Security review required before approving any model using `trust_remote_code=True`.
+* Changes to core architecture (framework, model family, runtime base image) must result in a new ADR revision (ADR-002, ADR-003, etc.).
+* Aligns with ISO 27001 and internal AI Model Lifecycle Management (MLLM) policy.
 
 ---
 
-## Performance Snapshot
+## 8. Future Enhancements
 
-| Metric            | Value              | Hardware                   |
-|-------------------|--------------------|----------------------------|
-| Model Load Time   | ~4 s               | Intel i7 / 32 GB RAM       |
-| Inference Latency | 80 – 120 ms / text | CPU-only                   |
-| Memory Footprint  | ~1.5 GB            | SentenceTransformer cached |
+1. **Model Context Protocol (MCP) Integration** for standardized cross-module communication.
+2. **Multi-model routing layer** (e.g., `/embed/{model}`) for online A/B testing.
+3. **Automatic model warm-up** to reduce startup latency.
+4. **Optional gRPC interface** for low-latency inference workloads.
+5. **Fine-tuning pipeline** for domain-specific embeddings (insurance, finance, etc.).
 
 ---
 
-## Extensibility Roadmap
+## 9. References
 
-| Next Step           | Description                                   |
-|---------------------|-----------------------------------------------|
-| **GraniteProvider** | On-prem IBM Granite model integration         |
-| **Auth Layer**      | API-Key / OAuth2 support for public exposure  |
-| **GPU Runtime**     | Optional Torch CUDA build                     |
-| **Tracing**         | OpenTelemetry spans for distributed debugging |
-| **Model Registry**  | Versioned model selection via config or DB    |
+* [IBM Granite Embedding R2 Model Card](https://huggingface.co/ibm-granite/granite-embedding-english-r2)
+* [FastAPI Documentation](https://fastapi.tiangolo.com)
+* [Sentence-Transformers Docs](https://www.sbert.net)
+* [Hugging Face Transformers](https://huggingface.co/docs/transformers)
+* [Twelve-Factor App Principles](https://12factor.net)
+* [OpenTelemetry / Prometheus Standards](https://opentelemetry.io)
+
+---
+
+## 10. Decision Summary
+
+| Category          | Decision                                |
+| ----------------- | --------------------------------------- |
+| **Architecture**  | Modular FastAPI microservice            |
+| **Model**         | IBM Granite Embedding English R2        |
+| **Deployment**    | Docker + Kubernetes                     |
+| **Observability** | Prometheus + JSON logs                  |
+| **Security**      | API key + CORS + offline mode           |
+| **Extensibility** | Model-agnostic, fallback-aware          |
+| **Compliance**    | ISO 27001 / AI lifecycle policy aligned |
+
+---
+
+**Final Decision:**
+
+> Deploy and standardize the **Granite Embedding Service** as the enterprise embedding microservice architecture for all RAG and knowledge retrieval workloads.
+> Future model upgrades or architectural shifts will require ADR revision approval.
+
+---

@@ -43,4 +43,4 @@ fi
 
 # --- Launch the app ---
 echo "🚀 Starting Embedding Service at http://localhost:8000 ..."
-uv run uvicorn embedding_service.main:create_app --factory --host 0.0.0.0 --port 8000
+uv run uvicorn embedding_service.main:app --host 0.0.0.0 --port 8000
