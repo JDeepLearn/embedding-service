@@ -21,7 +21,7 @@ class Settings(BaseSettings):
         description="Internal version tag for this deployment of the model.",
     )
     model_path: str = Field(
-        default="/Users/vel/study/ai-projects/jdeeplearn/source/models/ibm-granite/granite-embedding-english-r2",
+        default="/opt/models/granite-embedding-english-r2",
         description="Filesystem path to the local model directory.",
     )
 
